@@ -47,8 +47,43 @@ describe('analyzePatterns on synthetic data with a known sleep effect', () => {
     expect(run(d).insights.filter((i) => i.kind === 'trigger_pattern')).toEqual([]);
   });
 
-  it('respects maxInsights and returns empty for empty input', () => {
+  it('respects maxInsights and explains the lack of data for empty input', () => {
     expect(run(generateSynthetic({ days: 180, seed: 42 }), { maxInsights: 1 }).insights.length).toBeLessThanOrEqual(1);
-    expect(analyzePatterns(analyzePatternsSchema.parse({})).insights).toEqual([]);
+    expect(analyzePatterns(analyzePatternsSchema.parse({})).insights.map((i) => i.kind)).toEqual(['insufficient_data']);
+  });
+});
+
+describe('other detectors and data sufficiency', () => {
+  it('flags concentration of seizures in the morning window', () => {
+    const { insights } = run(generateSynthetic({ days: 180, seed: 42 }));
+    const t = insights.find((i) => i.kind === 'time_of_day');
+    expect(t?.evidence.bucket).toBe('morning');
+  });
+
+  it('explains what is missing when data is insufficient', () => {
+    const { insights } = run(generateSynthetic({ days: 5, seed: 1 }));
+    expect(insights).toHaveLength(1);
+    expect(insights[0]?.kind).toBe('insufficient_data');
+    expect(insights[0]?.confidence).toBe(0);
+  });
+
+  it('reports self-noted triggers that repeat', () => {
+    const d = generateSynthetic({ days: 120, seed: 11 });
+    d.seizures = d.seizures.map((s, i) => ({ ...s, triggersNoted: i % 2 === 0 ? ['Luces parpadeantes'] : [] }));
+    const { insights } = run(d);
+    expect(insights.some((i) => i.kind === 'self_reported_trigger')).toBe(true);
+  });
+
+  it('only pairs factors that are individually significant', () => {
+    const d = generateSynthetic({ days: 300, seed: 21, pSeizureHighStress: 0.5 });
+    const { insights } = run(d);
+    const pair = insights.find((i) => i.kind === 'cooccurrence');
+    if (pair) {
+      const individually = insights.filter((i) => i.kind === 'trigger_pattern').map((i) => i.evidence.factor);
+      for (const f of pair.evidence.factors as string[]) expect(individually).toContain(f);
+    }
+    const factors = insights.filter((i) => i.kind === 'trigger_pattern').map((i) => i.evidence.factor);
+    expect(factors).toContain('short_sleep');
+    expect(factors).toContain('high_stress');
   });
 });
