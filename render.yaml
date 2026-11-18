@@ -1,0 +1,16 @@
+# Blueprint de Render (plan gratis) para el servicio de IA.
+services:
+  - type: web
+    name: episafe-ia
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: INTERNAL_API_KEY    # clave compartida con el back (AI_API_KEY allí)
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://episafe-api.onrender.com
+      - key: ANTHROPIC_API_KEY   # opcional: sin ella usa solo el modelo propio
+        sync: false
